@@ -1,0 +1,35 @@
+[project]
+name = "okf-graphify"
+version = "1.0.0"
+description = "Bi-directional Graphify ↔ Google OKF v0.1 integration toolkit. Export knowledge graphs to LLM-optimized Markdown catalogs."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+]
+keywords = [
+    "okf", "open-knowledge-format", "graphify", "knowledge-graph",
+    "llm", "token-optimization", "rag", "progressive-disclosure",
+    "bidirectional", "codebase-analysis", "context-window",
+    "google-okf", "contractor-os", "markdown", "yaml"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Text Processing :: Markup",
+]
+
+[project.urls]
+Homepage = "https://github.com/hah23255/okf-graphify"
+Documentation = "https://github.com/hah23255/okf-graphify/blob/main/docs/deployment_guide.md"
+Repository = "https://github.com/hah23255/okf-graphify"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
