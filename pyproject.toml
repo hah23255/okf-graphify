@@ -12,7 +12,7 @@ keywords = [
     "okf", "open-knowledge-format", "graphify", "knowledge-graph",
     "llm", "token-optimization", "rag", "progressive-disclosure",
     "bidirectional", "codebase-analysis", "context-window",
-    "google-okf", "contractor-os", "markdown", "yaml"
+    "google-okf", "markdown", "yaml"
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

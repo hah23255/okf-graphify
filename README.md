@@ -20,9 +20,9 @@ version: 1.0.0
 
 ## What is this? / Какво е това?
 
-**EN:** A production-ready Python toolkit that converts Graphify knowledge graphs (NetworkX node-link data) into Google OKF v0.1 bundles — and back. OKF bundles are structured Markdown catalogs that reduce LLM token consumption by **98.2%** while maintaining 100% human readability.
+**EN:** A production-ready Python toolkit that converts Graphify knowledge graphs (NetworkX node-link data) into Google OKF v0.1 bundles — and back. OKF bundles are structured Markdown catalogs designed for progressive disclosure: LLMs query individual concept files instead of loading monolithic JSON graphs.
 
-**BG:** Production-ready Python инструментариум, който конвертира графи на знания от Graphify (NetworkX node-link данни) в Google OKF v0.1 пакети — и обратно. OKF пакетите са структурирани Markdown каталози, които намаляват консумацията на LLM токени с **98.2%**, като същевременно запазват 100% четимост от хора.
+**BG:** Production-ready Python инструментариум, който конвертира графи на знания от Graphify (NetworkX node-link данни) в Google OKF v0.1 пакети — и обратно. OKF пакетите са структурирани Markdown каталози, проектирани за прогресивно разкриване: LLM-ите зареждат отделни концептуални файлове вместо монолитни JSON графи.
 
 ---
 
@@ -55,7 +55,7 @@ python src/graphify_okf_integration_poc.py extract my_bundle/ reconstructed.json
 |---|---|
 | **Bi-directional** 🇬🇧 | Export Graphify graphs to OKF, import OKF bundles back to graphs. Двупосочна конверзия. |
 | **OKF v0.1 Compliant** | Strict adherence to Google's Open Knowledge Format specification. Спазване на спецификацията. |
-| **Progressive Disclosure** | 98.2% token reduction — only load what you need. Зареждайте само необходимото. |
+| **Progressive Disclosure** | Load individual concept files instead of entire graphs — context-efficient LLM queries. |
 | **YAML Frontmatter** | Every concept file carries structured metadata (type, tags, graphify_id, timestamp). |
 | **Cross-references** | Markdown-native links between concepts form a navigable knowledge graph. |
 | **Validator Included** | Built-in conformance checker for OKF v0.1 bundles. Вграден валидатор. |
@@ -97,12 +97,13 @@ graph.json (reconstructed)
 
 ## Performance / Производителност
 
-| Metric | Monolithic JSON | OKF Bundle | Improvement / Подобрение |
+OKF bundles improve LLM efficiency through progressive disclosure — queries target individual concept files (~1-2KB each) rather than loading entire graphs. See `docs/audit_report.md` for detailed analysis.
+
+| Concept | Monolithic Graph | OKF Bundle | Benefit / Полза |
 |---|---|---|---|
-| Query tokens | 45,000 | 800 | **98.2% reduction** |
-| File conflicts | High | Zero | Git-native isolation |
-| LLM compatibility | MCP-only | All Markdown engines | Universal |
-| Human readability | Poor | Excellent | Self-documenting |
+| Query granularity | Entire graph | Single concept file | Progressive disclosure |
+| Load pattern | All-or-nothing | On-demand navigation | Context efficiency |
+| File-level isolation | No (single JSON) | Yes (per-concept .md) | Git-native, zero merge conflicts |
 
 ---
 
@@ -131,7 +132,7 @@ okf-graphify/
 
 ## Tags / Тагове
 
-`okf` `open-knowledge-format` `graphify` `knowledge-graph` `llm` `token-optimization` `rag` `markdown` `progressive-disclosure` `yaml` `bidirectional` `python` `codebase-analysis` `context-window` `git-native` `google-okf` `contractor-os`
+`okf` `open-knowledge-format` `graphify` `knowledge-graph` `llm` `token-optimization` `rag` `markdown` `progressive-disclosure` `yaml` `bidirectional` `python` `codebase-analysis` `context-window` `git-native` `google-okf`
 
 ---
 
@@ -143,4 +144,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Author / Автор
 
-Created for the Contractor OS ecosystem. 🇧🇬 Създаден за екосистемата Contractor OS.
+HH 🇧🇬
