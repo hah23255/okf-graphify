@@ -58,48 +58,47 @@ python src/validate_okf.py output_bundle/
 python src/graphify_okf_integration_poc.py extract output_bundle/ reconstructed.json
 ```
 
-## Integration Patterns
+## Integration Patterns / Интеграционни модели
 
-### With Graphify Pipeline
+### With Graphify Pipeline / С Graphify pipeline
 
 ```python
 from src.graphify_okf_integration_poc import export_to_okf_bundle
 
-# After Graphify generates graph.json:
+# After Graphify generates graph.json / След като Graphify генерира graph.json:
 export_to_okf_bundle("graph.json", "docs/okf_catalog/")
 ```
 
-### With CI/CD
+### With CI/CD / С CI/CD
 
 ```bash
-# In your CI pipeline:
+# In your CI pipeline / Във вашия CI pipeline:
 python src/graphify_okf_integration_poc.py export graph.json build/okf_bundle/
 python src/validate_okf.py build/okf_bundle/ || exit 1
 ```
 
-### With LLM Context Injection
+### With LLM Context Injection / С LLM контекстно инжектиране
 
 ```python
-# Load only the index + relevant concept, not the whole graph
-index = open("bundle/index.md").read()        # ~500 tokens
-concept = open("bundle/concepts/Core/key_func.md").read()  # ~300 tokens
-# Total: ~800 tokens vs 45,000 for full graph.json
+# Load index + relevant concept instead of full graph
+# Зареди индекс + релевантен концепт вместо целия граф
+index = open("bundle/index.md").read()
+concept = open("bundle/concepts/Core/key_func.md").read()
 ```
 
 ## Troubleshooting / Отстраняване на проблеми
 
-| Problem | Solution |
+| Problem / Проблем | Solution / Решение |
 |---|---|
 | "No module named yaml" | `pip install pyyaml` |
 | Validation fails on references/ | Fixed in v1.0 — validator only scans `concepts/` |
-| Round-trip node IDs lost | Ensure `graphify_id` is in node data before export |
-| "Session not found" (Kimi bridge) | Clear `state.json` after Kimi CLI upgrades |
+| Round-trip node IDs lost / Загубени ID-та при конверзия | Ensure `graphify_id` is in node data before export |
 
-## Production Gateways
+## Production Gateways / Производствени критерии
 
-| Gateway | Criterion | Status |
+| Gateway / Критерий | Criterion / Изискване | Status / Статус |
 |---|---|---|
 | G1: Unit Tests | 100% pass | ✅ 5/5 |
 | G2: Conformance | Validator passes | ✅ |
 | G3: Security | No token/credential leaks | ✅ |
-| G4: Scale | <512MB on 50K LOC | ✅ |
+| G4: Scale | Stable on large repos | ✅ |
