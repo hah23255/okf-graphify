@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Graphify & Google OKF (Open Knowledge Format) v0.1 Integration Proof-of-Concept.
+"""Graphify & Google OKF (Open Knowledge Format) v0.1 Integration Module.
 
-This script implements both:
+This module implements:
 1. An Exporter: Turns Graphify's graph.json (NetworkX node-link data) into a
-   strictly compliant OKF v0.1 bundle.
-2. An Extractor: Reads an OKF v0.1 bundle and reconstructs a Graphify-compatible
-   knowledge graph with nodes and directed links.
+   strictly compliant OKF v0.1 bundle, dynamically mapping custom node properties
+   and preventing ID/filename collisions.
+2. An Extractor: Reads an OKF v0.1 bundle, deterministically parses custom directed
+   relationship links, and reconstructs a Graphify-compatible knowledge graph.
 """
 
 from __future__ import annotations
@@ -117,12 +118,22 @@ def export_to_okf_bundle(graph_json_path: str | Path, output_dir: str | Path) ->
             frontmatter = {
                 "type": okf_type,
                 "title": label,
-                "description": f"Extracted code concept representing '{label}' at {src_loc} of {src_file}",
+                "description": f"Extracted concept representing '{label}' at {src_loc} of {src_file}",
                 "resource": src_file,
                 "tags": [ftype, cname],
                 "timestamp": timestamp_str,
                 "graphify_id": nid
             }
+
+            # Prepare Dynamic Properties Serialization
+            properties_lines = []
+            raw_properties = n.get("properties", {})
+            if raw_properties:
+                properties_lines.append("## 📊 Technical Properties")
+                for k, v in raw_properties.items():
+                    key_label = k.replace("_", " ").title()
+                    properties_lines.append(f"- **{key_label}:** {v}")
+                properties_lines.append("")
 
             # Prepare Markdown Content
             md_lines = [
@@ -134,6 +145,7 @@ def export_to_okf_bundle(graph_json_path: str | Path, output_dir: str | Path) ->
                 "",
                 f"This concept representing `{label}` was analyzed and extracted by Graphify.",
                 "",
+                "\n".join(properties_lines) if properties_lines else "",
                 "## 📍 Location",
                 f"- **Source File:** `{src_file}`",
                 f"- **Source Location:** `{src_loc}`",
@@ -142,7 +154,7 @@ def export_to_okf_bundle(graph_json_path: str | Path, output_dir: str | Path) ->
                 ""
             ]
 
-            # Outgoing links
+            # Outgoing links (Using strict schema notation)
             md_lines.append("### Outgoing Relations")
             out_list = outgoing_edges.get(nid, [])
             if not out_list:
@@ -155,8 +167,7 @@ def export_to_okf_bundle(graph_json_path: str | Path, output_dir: str | Path) ->
                         tgt_cdir = tgt_node["_community_dir"]
                         tgt_label = tgt_node.get("label", edge["target"])
                         md_lines.append(
-                            f"- --({edge['relation']})--> [{tgt_label}](/concepts/{tgt_cdir}/{tgt_fname}.md) "
-                            f"(Confidence: *{edge['confidence']}*)"
+                            f"- --({edge['relation']})--> [{tgt_label}](/concepts/{tgt_cdir}/{tgt_fname}.md)"
                         )
             md_lines.append("")
 
@@ -173,8 +184,7 @@ def export_to_okf_bundle(graph_json_path: str | Path, output_dir: str | Path) ->
                         src_cdir = src_node["_community_dir"]
                         src_label = src_node.get("label", edge["source"])
                         md_lines.append(
-                            f"- <--({edge['relation']})-- [{src_label}](/concepts/{src_cdir}/{src_fname}.md) "
-                            f"(Confidence: *{edge['confidence']}*)"
+                            f"- <--({edge['relation']})-- [{src_label}](/concepts/{src_cdir}/{src_fname}.md)"
                         )
             md_lines.append("")
 
@@ -227,10 +237,11 @@ def extract_okf_bundle_to_graph(bundle_dir: str | Path, output_graph_json: str |
     print(f"🔍 Found {len(concept_files)} concept markdown files in OKF bundle.")
 
     # Track safe filename to node ID mapping for edge resolution
-    # Let's map e.g., "concepts/community_5/Value.md" -> its node ID
+    # Map "/concepts/community_dir/filename.md" -> unique deterministic node ID (community_dir:filename)
     path_to_node_id: dict[str, str] = {}
+    node_metadata: dict[str, dict] = {}
 
-    # Step 1: Read all nodes and register them
+    # Step 1: Read all nodes and register them deterministically
     for file in concept_files:
         try:
             content = file.read_text(encoding="utf-8")
@@ -242,13 +253,37 @@ def extract_okf_bundle_to_graph(bundle_dir: str | Path, output_graph_json: str |
             body = parts[2]
 
             label = frontmatter.get("title", file.stem)
-            nid = file.stem.lower()  # unique identifier from filename
+            community_name = frontmatter.get("tags", ["default"])[-1]
+            community_dir = safe_filename(community_name)
             
-            # Map absolute-like relative path from bundle concepts root
-            rel_bundle_path = f"/concepts/{file.relative_to(root / 'concepts').as_posix()}"
+            # Deterministic ID combining namespace paths to prevent name stem collisions
+            nid = f"{community_dir}:{file.stem.lower()}"
+            
+            rel_bundle_path = f"/concepts/{community_dir}/{file.name}"
             path_to_node_id[rel_bundle_path] = nid
-            # Also support bare filenames or absolute links
-            path_to_node_id[f"/concepts/{file.relative_to(root / 'concepts')}".replace(".md", "")] = nid
+            path_to_node_id[rel_bundle_path.replace(".md", "")] = nid
+
+            # Parse Dynamic Properties from the Body
+            properties = {}
+            prop_sec_match = re.search(r"## 📊 Technical Properties\n(.*?)(?=\n## |$)", body, re.DOTALL)
+            if prop_sec_match:
+                lines = prop_sec_match.group(1).split("\n")
+                for line in lines:
+                    match = re.match(r"-\s*\*\*(.*?)\*\*:\s*(.*)", line)
+                    if match:
+                        key = match.group(1).lower().replace(" ", "_")
+                        val = match.group(2).strip()
+                        # Clean simple values
+                        if val.lower() == "true":
+                            val = True
+                        elif val.lower() == "false":
+                            val = False
+                        else:
+                            try:
+                                val = float(val) if "." in val else int(val)
+                            except ValueError:
+                                pass
+                        properties[key] = val
 
             node_data = {
                 "id": nid,
@@ -257,57 +292,39 @@ def extract_okf_bundle_to_graph(bundle_dir: str | Path, output_graph_json: str |
                 "source_file": frontmatter.get("resource", "unknown"),
                 "source_location": "L1",
                 "community": 0,
-                "community_name": frontmatter.get("tags", ["default"])[-1]
+                "community_name": community_name,
+                "properties": properties
             }
             nodes.append(node_data)
+            node_metadata[nid] = {"file": file, "body": body, "community_dir": community_dir}
         except Exception as exc:
             print(f"Error parsing concept {file}: {exc}")
 
-    # Step 2: Parse body links to extract directed edges
-    link_re = re.compile(r"\[([^\]]+)\]\((/concepts/[^\)]+)\)")
-    for file in concept_files:
+    # Step 2: Parse custom relational links with high precision (ontology-aware)
+    # Extracts specifically: "- --(relation_type)--> [Label](/concepts/dir/dest.md)"
+    link_re = re.compile(r"-\s*--\(([^)]+)\)-->\s*\[([^\]]+)\]\((/concepts/[^\)]+)\)")
+    
+    for nid, meta in node_metadata.items():
         try:
-            content = file.read_text(encoding="utf-8")
-            parts = content.split("---", 2)
-            if len(parts) < 3:
-                continue
-            body = parts[2]
-            
-            src_path = f"/concepts/{file.relative_to(root / 'concepts').as_posix()}"
-            src_id = path_to_node_id.get(src_path)
-            if not src_id:
-                continue
-
+            body = meta["body"]
             matches = link_re.findall(body)
-            for text, dest_path in matches:
-                # Resolve destination node ID
-                # Strip extension or query parts if any
+            for relation, dest_label, dest_path in matches:
+                # Resolve exact target node ID mapping
                 clean_dest = dest_path.split("?")[0].split("#")[0]
                 dest_id = path_to_node_id.get(clean_dest) or path_to_node_id.get(clean_dest.replace(".md", ""))
                 
-                if dest_id and src_id != dest_id:
-                    # To avoid duplicating edges, we only extract outgoing edges
-                    # We can infer relation name from the text or surrounding markdown
-                    # Let's see if the line contains a relation name like --(calls)-->
-                    # Default relation is "references"
-                    relation = "references"
-                    if "calls" in text or "calls" in content:
-                        relation = "calls"
-                    elif "contains" in text:
-                        relation = "contains"
-
+                if dest_id and nid != dest_id:
                     link_data = {
-                        "source": src_id,
+                        "source": nid,
                         "target": dest_id,
                         "relation": relation,
                         "confidence": "EXTRACTED",
                         "weight": 1.0
                     }
-                    # Prevent duplicate links
                     if link_data not in links:
                         links.append(link_data)
         except Exception as exc:
-            print(f"Error extracting links from {file}: {exc}")
+            print(f"Error extracting links from node {nid}: {exc}")
 
     # Step 3: Write graph.json
     output_path = Path(output_graph_json)
