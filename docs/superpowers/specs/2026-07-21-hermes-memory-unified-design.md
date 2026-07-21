@@ -46,8 +46,8 @@ Providers run alongside the built-in (`agent_init.py:1447`); providers supplying
 
 | Component | Purpose |
 |---|---|
-| `unified_store.py` | Pure-Python store library (no hermes imports, independently testable). Entry model (date, statement, source, confidence). Topic-file CRUD. Char budgets. Atomic temp-file writes with `fcntl` locks (semantics mirrored from `tools/memory_tool.py:253-288, 769-798`). Merge-on-read so dream's direct file edits never trip a drift guard. |
-| `provider.py` | `UnifiedMemoryProvider(MemoryProvider)` — full lifecycle: `initialize`, `system_prompt_block`, `prefetch`/`queue_prefetch`, `sync_turn`, `get_tool_schemas`, `handle_tool_call`, `on_memory_write`, `on_session_end`, `on_pre_compress`, `backup_paths`. |
+| `unified_store.py` | Pure-Python store library (no hermes imports, independently testable). Entry model (date, statement, source, confidence). Topic-file CRUD. Per-topic char budgets (sized in the implementation plan; the index `MEMORY.md` follows dream's ≤200-line rule). Atomic temp-file writes with `fcntl` locks (semantics mirrored from `tools/memory_tool.py:253-288, 769-798`). Merge-on-read so dream's direct file edits never trip a drift guard. |
+| `provider.py` | `UnifiedMemoryProvider(MemoryProvider)` — full lifecycle: `initialize`, `system_prompt_block`, `prefetch`/`queue_prefetch`, `get_tool_schemas`, `handle_tool_call`, `on_memory_write`, `on_session_end`, `on_pre_compress`, `backup_paths`. `sync_turn` is a deliberate no-op — all durable writes flow through the single tool path, not per-turn extraction. |
 | `migrate.py` | One-time importer: parses §-delimited `memories/MEMORY.md` + `USER.md`, classifies entries into topic files with provenance metadata, dedupes against existing content, archives originals (never deletes). Dry-run by default. |
 | `cli.py` | `hermes memory-unified status\|migrate\|verify\|mode` via `register_cli_command`. |
 | `plugin.yaml` | Manifest; `kind: exclusive` (memory-provider convention; user-installed memory providers are auto-coerced, `plugins.py:1594`). |
