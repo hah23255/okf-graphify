@@ -16,7 +16,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date as _date
+from datetime import date as _date, datetime as _datetime
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -97,6 +97,8 @@ def _atomic_write(path: Path, content: str) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
         os.replace(tmp, path)
     except BaseException:
         try:
@@ -122,18 +124,34 @@ class UnifiedMemoryStore:
         if not path.exists():
             return []
         try:
-            return parse_entries(path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            quarantine = self.root / ".corrupt"
-            quarantine.mkdir(exist_ok=True)
-            shutil.move(str(path), quarantine / f"{path.name}.{_date.today()}")
+            self._quarantine(path)
             return []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if not ENTRY_RE.match(line):
+                self._quarantine(path)
+                return []
+        return parse_entries(text)
+
+    def _quarantine(self, path: Path) -> None:
+        quarantine = self.root / ".corrupt"
+        quarantine.mkdir(exist_ok=True)
+        stamp = f"{_datetime.now():%Y%m%d-%H%M%S}"
+        dest = quarantine / f"{path.name}.{stamp}"
+        n = 1
+        while dest.exists():
+            dest = quarantine / f"{path.name}.{stamp}.{n}"
+            n += 1
+        shutil.move(str(path), dest)
 
     def load(self, topic: str) -> list[Entry]:
         return self._read_entries(self._topic_path(topic))
 
-    def _update(self, topic: str, fn: Callable[[list[Entry]], tuple[list[Entry], object]],
-                entry_date: Optional[str] = None):
+    def _update(self, topic: str, fn: Callable[[list[Entry]], tuple[list[Entry], object]]):
         """Lock, re-read, apply fn(entries)->(new_entries, result), write, budget-check."""
         path = self._topic_path(topic)
         with _file_lock(path.with_suffix(path.suffix + ".lock")):
@@ -147,6 +165,11 @@ class UnifiedMemoryStore:
 
     def add(self, topic: str, text: str, source: str = "",
             confidence: str = "", entry_date: Optional[str] = None) -> Entry:
+        """Append text to topic, deduped by normalized key.
+
+        On a dedupe key hit the EXISTING entry is returned unchanged —
+        the new source/confidence are discarded (intentional for now).
+        """
         entry = Entry(date=entry_date or str(_date.today()), text=text,
                       source=source, confidence=confidence)
 

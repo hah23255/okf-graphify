@@ -62,3 +62,30 @@ def test_concurrent_adds_lose_nothing(store):
     for t in threads: t.start()
     for t in threads: t.join()
     assert len(store.load("facts")) == 20
+
+
+def test_quarantine_on_invalid_bytes(store):
+    (store.root / "facts.md").write_bytes(b"\xff\xfe garbage")
+    assert store.load("facts") == []
+    quarantined = list((store.root / ".corrupt").iterdir())
+    assert len(quarantined) == 1
+    assert quarantined[0].read_bytes() == b"\xff\xfe garbage"
+
+
+def test_quarantine_on_unparseable_content(store):
+    original = "# Facts\n\nsome prose line that is not an entry\n"
+    (store.root / "facts.md").write_text(original, encoding="utf-8")
+    store.add("facts", "x")
+    quarantined = list((store.root / ".corrupt").iterdir())
+    assert len(quarantined) == 1
+    assert quarantined[0].read_text(encoding="utf-8") == original
+    assert [e.text for e in store.load("facts")] == ["x"]
+
+
+def test_quarantine_names_unique_same_day(store):
+    qdir = store.root / ".corrupt"
+    (store.root / "facts.md").write_bytes(b"\xff\xfe first")
+    store.load("facts")
+    (store.root / "facts.md").write_bytes(b"\xff\xfe second")
+    store.load("facts")
+    assert len(list(qdir.iterdir())) == 2
