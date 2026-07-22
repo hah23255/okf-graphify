@@ -31,3 +31,34 @@ def test_entry_key_normalizes_for_dedupe():
     a = Entry(date="2026-07-20", text="Likes  Tea!")
     b = Entry(date="2026-07-21", text="likes tea")
     assert a.key() == b.key()
+
+
+def test_add_creates_topic_file(store):
+    e = store.add("preferences", "likes tea", source="test", confidence="high")
+    assert e.date and e.text == "likes tea"
+    loaded = store.load("preferences")
+    assert [x.text for x in loaded] == ["likes tea"]
+
+
+def test_add_appends_in_order(store):
+    store.add("facts", "first")
+    store.add("facts", "second")
+    assert [e.text for e in store.load("facts")] == ["first", "second"]
+
+
+def test_unknown_topic_raises(store):
+    import pytest
+    from store import StoreError
+    with pytest.raises(StoreError):
+        store.add("nonsense", "x")
+
+
+def test_concurrent_adds_lose_nothing(store):
+    import threading
+    def worker(i):
+        for j in range(5):
+            store.add("facts", f"w{i}-{j}")
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(4)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+    assert len(store.load("facts")) == 20
