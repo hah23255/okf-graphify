@@ -170,7 +170,8 @@ class UnifiedMemoryStore:
         On a dedupe key hit the EXISTING entry is returned unchanged —
         the new source/confidence are discarded (intentional for now).
         """
-        entry = Entry(date=entry_date or str(_date.today()), text=text,
+        sanitized_text = " ".join(text.split())
+        entry = Entry(date=entry_date or str(_date.today()), text=sanitized_text,
                       source=source, confidence=confidence)
 
         def fn(entries):
@@ -180,9 +181,77 @@ class UnifiedMemoryStore:
 
         return self._update(topic, fn)
 
-    # --- budget / archive (Task 5 fills these in) ---
-    def _enforce_budget(self, topic, entries):
-        return entries, []
+    @staticmethod
+    def _find(entries: list[Entry], text: str) -> Optional[int]:
+        """Exact-text match first, then single substring match. None if ambiguous."""
+        for i, e in enumerate(entries):
+            if e.text == text:
+                return i
+        matches = [i for i, e in enumerate(entries) if text in e.text]
+        return matches[0] if len(matches) == 1 else None
 
-    def _append_archive(self, topic, archived):
-        pass
+    def replace(self, topic: str, old_text: str, new_text: str) -> bool:
+        def fn(entries):
+            idx = self._find(entries, old_text)
+            if idx is None:
+                return entries, False
+            updated = Entry(date=entries[idx].date, text=" ".join(new_text.split()),
+                            source=entries[idx].source,
+                            confidence=entries[idx].confidence)
+            return entries[:idx] + [updated] + entries[idx + 1:], True
+        return self._update(topic, fn)
+
+    def remove(self, topic: str, text: str) -> bool:
+        def fn(entries):
+            idx = self._find(entries, text)
+            if idx is None:
+                return entries, False
+            return entries[:idx] + entries[idx + 1:], True
+        return self._update(topic, fn)
+
+    def _enforce_budget(self, topic: str, entries: list[Entry]):
+        """Move oldest entries (by date, stable) to archive until under budget."""
+        budget = TOPIC_BUDGETS[topic]
+        kept = list(entries)
+        archived: list[Entry] = []
+        while kept and sum(len(e.render()) + 1 for e in kept) > budget and len(kept) > 1:
+            archived.append(kept.pop(0))
+        return kept, archived
+
+    def _append_archive(self, topic: str, archived: list[Entry]) -> None:
+        path = self.root / ARCHIVE_NAME
+        existing = path.read_text(encoding="utf-8") if path.exists() else "# Archive\n"
+        block = "\n".join(e.render() for e in archived)
+        _atomic_write(path, f"{existing.rstrip()}\n\n## From {topic} ({_date.today()})\n\n{block}\n")
+
+    def search(self, query: str, limit: int = 8) -> list[tuple[str, Entry]]:
+        """Keyword scoring: count of query terms present in entry text. No embeddings."""
+        terms = [t for t in re.findall(r"\w+", query.lower()) if len(t) > 2]
+        if not terms:
+            return []
+        scored = []
+        for topic in TOPICS:
+            for e in self.load(topic):
+                hay = e.text.lower()
+                score = sum(1 for t in terms if t in hay)
+                if score:
+                    scored.append((score, topic, e))
+        scored.sort(key=lambda x: (-x[0], x[2].date))
+        return [(topic, e) for _, topic, e in scored[:limit]]
+
+    def recall_block(self, budget: int = 2000) -> str:
+        """System-prompt recall text: MEMORY.md index if present, else topic digest."""
+        index = self.root / INDEX_NAME
+        if index.exists():
+            text = index.read_text(encoding="utf-8")
+        else:
+            parts = []
+            for topic in TOPICS:
+                entries = self.load(topic)
+                if entries:
+                    lines = "\n".join(e.render() for e in entries[-5:])
+                    parts.append(f"## {topic.capitalize()}\n{lines}")
+            text = "# Memory\n\n" + "\n\n".join(parts) if parts else ""
+        return text[:budget]
+
+

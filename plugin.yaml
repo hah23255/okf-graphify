@@ -1,0 +1,5 @@
+name: memory_unified
+version: 0.1.0
+description: "Unified structured memory: single topic-file store for gateway memory and dream consolidation, with legacy flat-memory migration."
+author: "hah23255"
+kind: exclusive

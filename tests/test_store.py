@@ -89,3 +89,84 @@ def test_quarantine_names_unique_same_day(store):
     (store.root / "facts.md").write_bytes(b"\xff\xfe second")
     store.load("facts")
     assert len(list(qdir.iterdir())) == 2
+
+
+def test_add_sanitizes_multiline_text(store):
+    e = store.add("facts", "line one\nline two")
+    assert "\n" not in e.text
+    assert [x.text for x in store.load("facts")] == ["line one line two"]
+
+
+def test_replace_swaps_text(store):
+    store.add("facts", "sky is green")
+    assert store.replace("facts", "sky is green", "sky is blue") is True
+    assert [e.text for e in store.load("facts")] == ["sky is blue"]
+
+
+def test_replace_missing_returns_false(store):
+    store.add("facts", "something")
+    assert store.replace("facts", "absent", "new") is False
+
+
+def test_replace_preserves_metadata(store):
+    store.add("facts", "old", source="s", confidence="high")
+    store.replace("facts", "old", "new")
+    e = store.load("facts")[0]
+    assert e.source == "s" and e.confidence == "high"
+
+
+def test_remove_deletes_matching_entry(store):
+    store.add("facts", "keep")
+    store.add("facts", "drop")
+    assert store.remove("facts", "drop") is True
+    assert [e.text for e in store.load("facts")] == ["keep"]
+
+
+def test_remove_missing_returns_false(store):
+    assert store.remove("facts", "nothing") is False
+
+
+def test_overflow_rolls_oldest_into_archive(store, monkeypatch):
+    import store as store_mod
+    monkeypatch.setitem(store_mod.TOPIC_BUDGETS, "facts", 120)
+    for i in range(6):
+        store.add("facts", f"entry number {i} with some padding text")
+    active = store.load("facts")
+    assert sum(len(e.render()) for e in active) <= 200  # budget + slack
+    archive = (store.root / "archive.md").read_text()
+    assert "entry number 0" in archive
+
+
+def test_budget_not_enforced_when_under(store):
+    store.add("facts", "tiny")
+    assert not (store.root / "archive.md").exists()
+
+
+def test_search_ranks_by_term_hits(store):
+    store.add("facts", "python is a language")
+    store.add("facts", "python snakes are large reptiles with scales")
+    store.add("decisions", "chose postgres for the database")
+    hits = store.search("python reptiles")
+    assert hits[0][1].text.startswith("python snakes")
+    assert all(topic in ("facts", "decisions") for topic, _ in hits)
+
+
+def test_search_no_match_returns_empty(store):
+    store.add("facts", "something")
+    assert store.search("zzz qqq") == []
+
+
+def test_recall_block_renders_index_within_budget(store):
+    store.add("preferences", "likes tea")
+    block = store.recall_block(budget=500)
+    assert "likes tea" in block
+    assert len(block) <= 500
+
+
+def test_recall_block_prefers_existing_index(store):
+    (store.root / "MEMORY.md").write_text("# Memory Index\n\nCUSTOM INDEX CONTENT\n")
+    store.add("facts", "not in index")
+    block = store.recall_block(budget=2000)
+    assert "CUSTOM INDEX CONTENT" in block
+
+
