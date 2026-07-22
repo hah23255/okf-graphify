@@ -11,9 +11,7 @@ for p in (str(REPO_ROOT), str(HERMES_AGENT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from store import UnifiedMemoryStore  # noqa: E402
-
-
 @pytest.fixture()
 def store(tmp_path):
+    from store import UnifiedMemoryStore  # lazy: exists from Task 3 on
     return UnifiedMemoryStore(tmp_path / "memory")

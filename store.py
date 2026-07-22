@@ -31,6 +31,9 @@ TOPIC_BUDGETS = {
 INDEX_NAME = "MEMORY.md"
 ARCHIVE_NAME = "archive.md"
 
+# Known failure mode: entry text ending in a metadata-shaped fragment
+# `*(source: X, confidence: Y)*` is always parsed as metadata, so such
+# text is not roundtrip-stable (the fragment is split off on re-parse).
 ENTRY_RE = re.compile(
     r"^\* \*\*\[(?P<date>\d{4}-\d{2}-\d{2})\]\*\* (?P<text>.*?)"
     r"(?: \*\(source: (?P<source>.*?), confidence: (?P<confidence>[^)]*)\)\*)?\s*$"
